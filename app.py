@@ -54,7 +54,7 @@ st.markdown(f"""
     }}
     
     /* Technical Formula Styling */
-    .formula-badge {{ 
+    .formula-text {{ 
         font-family: 'Consolas', 'Courier New', monospace; 
         color: #0f172a; 
         background: #f1f5f9; 
@@ -104,71 +104,97 @@ def format_indian(number):
 # ==========================================
 # 3. ADVANCED COMPUTATION (CC 51/2024 & 25/2025)
 # ==========================================
-def run_rate_engine(category, input_load, load_unit):
+def run_rate_engine(app_mode, category, input_load, load_unit, existing_load):
     year_factor = 1.06 # 2026 Compounded Factor [cite: 125, 126]
     meta = {}
     
+    # Base configuration targets
+    curr_input = input_load if app_mode == "New Connection" else (existing_load + input_load)
+    calc_load = input_load # For processing and absolute SCC bounds
+    
     # --- Dynamic Power Factor Engine (kW to kVA Rules) ---
-    if load_unit == "kW" and input_load > 20:
-        load = input_load / 0.95
-        meta['conv_note'] = f"⚠️ Input load of {input_load} kW exceeded 20 kW. Converted using 0.95 Standard Power Factor to <b>{load:.2f} kVA</b> base."
+    if load_unit == "kW" and curr_input > 20:
+        base_load = curr_input / 0.95
+        factor_load = input_load / 0.95
+        meta['conv_note'] = f"⚠️ Total load ({curr_input:.2f} kW) crossed 20 kW threshold. Calculated using 0.95 Power Factor onto a <b>{base_load:.2f} kVA</b> base framework."
     else:
-        load = input_load
-        meta['conv_note'] = f"Target base evaluated at <b>{load:.2f} {load_unit}</b>."
+        base_load = curr_input
+        factor_load = input_load
+        meta['conv_note'] = f"Target total calculation infrastructure evaluated at <b>{base_load:.2f} {load_unit}</b>."
 
-    # 1. PROCESSING FEE (CC 25/2025 Page 4) [cite: 242]
-    if load <= 7: p_fee = 35 if category == "DS" else 85
-    elif load <= 100: p_fee = 180
-    elif load <= 150: p_fee = 1000
-    else: p_fee = min(load * 12, 4000)
-    meta['PF_EQ'] = f"Processing Fee Base = ₹{format_indian(p_fee)}"
+    # 1. PROCESSING FEE (CC 25/2025 Page 4) 
+    # Chargeable on the extension quantum or full new load capacity
+    fee_load = factor_load if app_mode == "Extension of Load" else base_load
+    if fee_load <= 7: p_fee = 35 if category == "DS" else 85
+    elif fee_load <= 100: p_fee = 180
+    elif fee_load <= 150: p_fee = 1000
+    else: p_fee = min(fee_load * 12, 4000)
+    meta['PF_EQ'] = f"Processing Fee Segment Base = ₹{format_indian(p_fee)}"
 
     # 2. ACD SECURITY DEPOSIT (CC 25/2025 Page 5-6) [cite: 245, 249]
     if category == "DS":
-        if load <= 7: rate = 600; eq = f"{load:.2f} kW x ₹600 (Bi-monthly Base)"
-        elif load <= 20: rate = 300; eq = f"{load:.2f} kW x ₹300"
-        else: rate = 500; eq = f"{load:.2f} kVA x ₹500"
+        if base_load <= 7: rate = 600; eq = f"₹600/kW Slab (Bi-monthly Infrastructure)"
+        elif base_load <= 20: rate = 300; eq = f"₹300/kW Slab Matrix"
+        else: rate = 500; eq = f"₹500/kVA Volumetric Bracket"
     elif category == "NRS":
-        if load <= 7: rate = 880; eq = f"{load:.2f} kW x ₹880 (Bi-monthly Base)"
-        elif load <= 20: rate = 470; eq = f"{load:.2f} kW x ₹470"
-        else: rate = 700; eq = f"{load:.2f} kVA x ₹700"
-    elif category == "SP": rate = 650; eq = f"{load:.2f} kVA x ₹650"
-    elif category == "MS": rate = 900; eq = f"{load:.2f} kVA x ₹900"
-    elif category == "LS": rate = 1900; eq = f"{load:.2f} kVA x ₹1,900"
-    acd = load * rate
-    meta['ACD_EQ'] = eq
+        if base_load <= 7: rate = 880; eq = f"₹880/kW Slab (Bi-monthly Infrastructure)"
+        elif base_load <= 20: rate = 470; eq = f"₹470/kW Slab Matrix"
+        else: rate = 700; eq = f"₹700/kVA Volumetric Bracket"
+    elif category == "SP": rate = 650; eq = f"₹650/kVA Small Power Standard"
+    elif category == "MS": rate = 900; eq = f"₹900/kVA Medium Power Standard"
+    elif category == "LS": rate = 1900; eq = f"₹1,900/kVA Large Industry General Base"
+    
+    if app_mode == "New Connection":
+        acd = base_load * rate
+        meta['ACD_EQ'] = f"{base_load:.2f} Capacity x {eq}"
+    else:
+        # Dynamic differential calculation for extension
+        prev_calc_load = existing_load / 0.95 if (load_unit == "kW" and existing_load > 20) else existing_load
+        acd = (base_load * rate) - (prev_calc_load * rate)
+        if acd < 0: acd = 0
+        meta['ACD_EQ'] = f"Differential Assessment: [Total {base_load:.2f} - Existing {prev_calc_load:.2f}] x {eq}"
 
     # 3. SCC / SERVICE CONNECTION CHARGES (CC 51/2024 Annexure-1) [cite: 96, 97]
-    if load <= 100:
+    # Charged purely on the additional extension load or total new load asset value
+    if base_load <= 100:
         if category == "DS":
-            s_rate = 550 if load <= 2 else (1250 if load <= 7 else (1900 if load <= 50 else 2100))
+            s_rate = 550 if base_load <= 2 else (1250 if base_load <= 7 else (1900 if base_load <= 50 else 2100))
         elif category == "NRS":
-            s_rate = 1250 if load <= 7 else (2000 if load <= 20 else 2300)
+            s_rate = 1250 if base_load <= 7 else (2000 if base_load <= 20 else 2300)
         else: s_rate = 3250
-        scc = load * s_rate
-        meta['SCC_EQ'] = f"{load:.2f} x Fixed Slab Rate ₹{s_rate}"
-    elif load <= 150:
-        scc = load * 1400 [cite: 98]
-        meta['SCC_EQ'] = f"{load:.2f} kVA x Normative Bracket Rate ₹1,400" [cite: 98]
+        scc = factor_load * s_rate
+        meta['SCC_EQ'] = f"{factor_load:.2f} Extension/New Units x Active Slab Rate ₹{s_rate}"
+    elif base_load <= 150:
+        scc = factor_load * 1400 [cite: 104]
+        meta['SCC_EQ'] = f"{factor_load:.2f} Extension/New Capacity kVA x Normative Rate ₹1,400" [cite: 104]
     else:
-        prop_rate = 1230 * year_factor # Base ₹1230 + 6% 2026 inflation [cite: 110, 125]
-        scc = load * prop_rate
-        meta['SCC_EQ'] = f"{load:.2f} kVA x (₹1,230 Base x 1.06 Inflation Increment) = ₹{prop_rate:.2f}/kVA" [cite: 110, 125]
+        prop_rate = 1230 * year_factor # Base ₹1230 + 6% compounding 2026 inflation escalation [cite: 110, 125]
+        scc = factor_load * prop_rate
+        meta['SCC_EQ'] = f"{factor_load:.2f} Extension/New kVA x (₹1,230 Base x 1.06 Inflation Index) = ₹{prop_rate:.2f}/kVA" [cite: 110, 125]
 
     # 4. INITIAL METER SECURITY (CC 25/2025 Page 6) [cite: 249]
-    if load <= 7: m_sec = 680; m_lbl = "Single Phase Static/Smart System"
-    elif load <= 20: m_sec = 1290; m_lbl = "Three Phase Whole Current System"
-    elif load <= 100: m_sec = 2460; m_lbl = "LT CT Operated Volumetric Meter"
-    else: m_sec = 83240; m_lbl = "11kV Heavy Duty CT/PT Metering Unit"
+    # Extension only changes meter charges if system threshold shifts hardware category
+    if base_load <= 7: m_sec = 680; m_lbl = "Single Phase Static System"
+    elif base_load <= 20: m_sec = 1290; m_lbl = "Three Phase Whole Current System"
+    elif base_load <= 100: m_sec = 2460; m_lbl = "LT CT Operated Volumetric System"
+    else: m_sec = 83240; m_lbl = "11kV Heavy Duty CT/PT Substation Unit"
+    
+    if app_mode == "Extension of Load":
+        m_sec = 0 # Handled if hardware upgrade is explicitly specified by user
+        m_lbl += " (Existing structure preserved without hardware revision)"
     meta['MS_EQ'] = m_lbl
 
     # 5. MCB SECURITY ENCLOSURES (CC 25/2025 Page 6) [cite: 249]
-    if load <= 7: mcb = 590; mcb_lbl = "Single Phase standard MCB Enclosure"
-    elif load <= 100: mcb = 1140; mcb_lbl = "Three Phase MCB/MMB Complete Box"
-    else: mcb = 6570; mcb_lbl = "HT Standard Protective Cubicle Chamber"
+    if base_load <= 7: mcb = 590; mcb_lbl = "Single Phase Standard Enclosure Setup"
+    elif base_load <= 100: mcb = 1140; mcb_lbl = "Three Phase/LT CT MMB Box Enclosure"
+    else: mcb = 6570; mcb_lbl = "HT Structural Protective Cubicle Installation"
+    
+    if app_mode == "Extension of Load":
+        mcb = 0
+        mcb_lbl += " (Enclosure system asset status maintained)"
     meta['MCB_EQ'] = mcb_lbl
 
-    return p_fee, acd, scc, m_sec, mcb, meta, load
+    return p_fee, acd, scc, m_sec, mcb, meta, base_load
 
 # ==========================================
 # 4. MODERN APPLICATION INTERFACE
@@ -187,14 +213,19 @@ col_panel, col_live = st.columns([1.1, 1], gap="large")
 with col_panel:
     st.markdown("### 📋 Configuration Panel")
     with st.container(border=True):
+        app_mode = st.selectbox("Application Request Category", ["New Connection", "Extension of Load"])
         cat_select = st.selectbox("Consumer Category Profile", ["DS", "NRS", "SP", "MS", "LS"], 
                                   help="DS=Domestic, NRS=Commercial, SP/MS/LS=Industrial Tiers")
         
         c_unit1, c_unit2 = st.columns([2, 1])
-        load_input = c_unit1.number_input("Applied Load / Sanctioned Limit", min_value=0.1, value=5.0, step=1.0)
+        load_input = c_unit1.number_input("Load Target Quantum (Applied Load)", min_value=0.1, value=5.0, step=1.0)
         unit_select = c_unit2.selectbox("Load Unit", ["kW", "kVA"])
         
-    pf, ac, sc, ms, mcb, calc_meta, final_billing_load = run_rate_engine(cat_select, load_input, unit_select)
+        existing_load = 0.0
+        if app_mode == "Extension of Load":
+            existing_load = st.number_input("Enter Existing Sanctioned Load Capacity", min_value=0.0, value=0.0, step=1.0)
+        
+    pf, ac, sc, ms, mcb, calc_meta, final_billing_load = run_rate_engine(app_mode, cat_select, load_input, unit_select, existing_load)
     total_dn_amount = pf + ac + sc + ms + mcb
 
     st.write("")
