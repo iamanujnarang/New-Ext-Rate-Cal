@@ -105,14 +105,12 @@ def format_indian(number):
 # 3. ADVANCED COMPUTATION (CC 51/2024 & 25/2025)
 # ==========================================
 def run_rate_engine(app_mode, category, input_load, load_unit, existing_load):
-    year_factor = 1.06 # 2026 Compounded Factor [cite: 125, 126]
+    year_factor = 1.06 
     meta = {}
     
-    # Base configuration targets
     curr_input = input_load if app_mode == "New Connection" else (existing_load + input_load)
-    calc_load = input_load # For processing and absolute SCC bounds
+    calc_load = input_load 
     
-    # --- Dynamic Power Factor Engine (kW to kVA Rules) ---
     if load_unit == "kW" and curr_input > 20:
         base_load = curr_input / 0.95
         factor_load = input_load / 0.95
@@ -122,8 +120,7 @@ def run_rate_engine(app_mode, category, input_load, load_unit, existing_load):
         factor_load = input_load
         meta['conv_note'] = f"Target total calculation infrastructure evaluated at <b>{base_load:.2f} {load_unit}</b>."
 
-    # 1. PROCESSING FEE (CC 25/2025 Page 4) 
-    # Chargeable on the extension quantum or full new load capacity
+    # 1. PROCESSING FEE
     fee_load = factor_load if app_mode == "Extension of Load" else base_load
     if fee_load <= 7: p_fee = 35 if category == "DS" else 85
     elif fee_load <= 100: p_fee = 180
@@ -131,7 +128,7 @@ def run_rate_engine(app_mode, category, input_load, load_unit, existing_load):
     else: p_fee = min(fee_load * 12, 4000)
     meta['PF_EQ'] = f"Processing Fee Segment Base = ₹{format_indian(p_fee)}"
 
-    # 2. ACD SECURITY DEPOSIT (CC 25/2025 Page 5-6) [cite: 245, 249]
+    # 2. ACD SECURITY DEPOSIT
     if category == "DS":
         if base_load <= 7: rate = 600; eq = f"₹600/kW Slab (Bi-monthly Infrastructure)"
         elif base_load <= 20: rate = 300; eq = f"₹300/kW Slab Matrix"
@@ -148,14 +145,12 @@ def run_rate_engine(app_mode, category, input_load, load_unit, existing_load):
         acd = base_load * rate
         meta['ACD_EQ'] = f"{base_load:.2f} Capacity x {eq}"
     else:
-        # Dynamic differential calculation for extension
         prev_calc_load = existing_load / 0.95 if (load_unit == "kW" and existing_load > 20) else existing_load
         acd = (base_load * rate) - (prev_calc_load * rate)
         if acd < 0: acd = 0
         meta['ACD_EQ'] = f"Differential Assessment: [Total {base_load:.2f} - Existing {prev_calc_load:.2f}] x {eq}"
 
-    # 3. SCC / SERVICE CONNECTION CHARGES (CC 51/2024 Annexure-1) [cite: 96, 97]
-    # Charged purely on the additional extension load or total new load asset value
+    # 3. SCC / SERVICE CONNECTION CHARGES
     if base_load <= 100:
         if category == "DS":
             s_rate = 550 if base_load <= 2 else (1250 if base_load <= 7 else (1900 if base_load <= 50 else 2100))
@@ -165,26 +160,25 @@ def run_rate_engine(app_mode, category, input_load, load_unit, existing_load):
         scc = factor_load * s_rate
         meta['SCC_EQ'] = f"{factor_load:.2f} Extension/New Units x Active Slab Rate ₹{s_rate}"
     elif base_load <= 150:
-        scc = factor_load * 1400 [cite: 104]
-        meta['SCC_EQ'] = f"{factor_load:.2f} Extension/New Capacity kVA x Normative Rate ₹1,400" [cite: 104]
+        scc = factor_load * 1400
+        meta['SCC_EQ'] = f"{factor_load:.2f} Extension/New Capacity kVA x Normative Rate ₹1,400"
     else:
-        prop_rate = 1230 * year_factor # Base ₹1230 + 6% compounding 2026 inflation escalation [cite: 110, 125]
+        prop_rate = 1230 * year_factor 
         scc = factor_load * prop_rate
-        meta['SCC_EQ'] = f"{factor_load:.2f} Extension/New kVA x (₹1,230 Base x 1.06 Inflation Index) = ₹{prop_rate:.2f}/kVA" [cite: 110, 125]
+        meta['SCC_EQ'] = f"{factor_load:.2f} Extension/New kVA x (₹1,230 Base x 1.06 Inflation Index) = ₹{prop_rate:.2f}/kVA"
 
-    # 4. INITIAL METER SECURITY (CC 25/2025 Page 6) [cite: 249]
-    # Extension only changes meter charges if system threshold shifts hardware category
+    # 4. INITIAL METER SECURITY
     if base_load <= 7: m_sec = 680; m_lbl = "Single Phase Static System"
     elif base_load <= 20: m_sec = 1290; m_lbl = "Three Phase Whole Current System"
     elif base_load <= 100: m_sec = 2460; m_lbl = "LT CT Operated Volumetric System"
     else: m_sec = 83240; m_lbl = "11kV Heavy Duty CT/PT Substation Unit"
     
     if app_mode == "Extension of Load":
-        m_sec = 0 # Handled if hardware upgrade is explicitly specified by user
+        m_sec = 0 
         m_lbl += " (Existing structure preserved without hardware revision)"
     meta['MS_EQ'] = m_lbl
 
-    # 5. MCB SECURITY ENCLOSURES (CC 25/2025 Page 6) [cite: 249]
+    # 5. MCB SECURITY ENCLOSURES
     if base_load <= 7: mcb = 590; mcb_lbl = "Single Phase Standard Enclosure Setup"
     elif base_load <= 100: mcb = 1140; mcb_lbl = "Three Phase/LT CT MMB Box Enclosure"
     else: mcb = 6570; mcb_lbl = "HT Structural Protective Cubicle Installation"
@@ -207,7 +201,6 @@ st.markdown(f"""
     </div>
 """, unsafe_allow_html=True)
 
-# Main Two-Column UI Frame
 col_panel, col_live = st.columns([1.1, 1], gap="large")
 
 with col_panel:
@@ -231,7 +224,6 @@ with col_panel:
     st.write("")
     st.markdown("### 🔍 Itemized Calculations")
     
-    # 1. SCC Expandable Card
     with st.expander("🚠 Service Connection Charges (SCC)", expanded=True):
         st.markdown(f"""
         <table style="width:100%;"><tr>
@@ -241,7 +233,6 @@ with col_panel:
         <div class="formula-text"><b>PSPCL Logic:</b> {calc_meta['SCC_EQ']}</div>
         """, unsafe_allow_html=True)
 
-    # 2. ACD Expandable Card
     with st.expander("🔒 Security Consumption (ACD)", expanded=True):
         st.markdown(f"""
         <table style="width:100%;"><tr>
@@ -251,7 +242,6 @@ with col_panel:
         <div class="formula-text"><b>PSPCL Logic:</b> {calc_meta['ACD_EQ']}</div>
         """, unsafe_allow_html=True)
 
-    # 3. Meter & MCB Security Card
     with st.expander("📟 Metering Hardware & Enclosure Security", expanded=False):
         st.markdown(f"""
         <table style="width:100%;">
@@ -262,7 +252,6 @@ with col_panel:
         <div class="formula-text"><b>Meter Class:</b> {calc_meta['MS_EQ']}<br><b>Enclosure Type:</b> {calc_meta['MCB_EQ']}</div>
         """, unsafe_allow_html=True)
 
-    # 4. Processing Fee Card
     with st.expander("📑 Processing & Administrative Charges", expanded=False):
         st.markdown(f"""
         <table style="width:100%;"><tr>
@@ -276,7 +265,6 @@ with col_panel:
 with col_live:
     st.markdown("### 📊 Live Summary Status")
     
-    # Real-Time Dynamic Total Calculation Dashboard Panel
     st.markdown(f"""
         <div class="total-panel">
             <span style="font-size: 1.15rem; text-transform: uppercase; letter-spacing: 2px; opacity: 0.85; font-weight: 600;">Demand Notice Estimate</span>
@@ -288,7 +276,6 @@ with col_live:
     """, unsafe_allow_html=True)
     
     st.write("")
-    # Quick Regulatory Reference Table 
     with st.container(border=True):
         st.markdown("**⚡ Quick Reference Regulatory Thresholds:**")
         ref_data = pd.DataFrame({
